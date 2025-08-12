@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Validasi Data 4D dengan Navbar & Angka Main</title>
+  <title>Validasi Data 4D (B2-B13) dengan Filter Shio</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="flex min-h-screen bg-gray-100 font-sans">
@@ -17,9 +17,9 @@
   </nav>
 
   <!-- Konten utama -->
-  <main class="flex-1 p-6 max-w-5xl mx-auto">
+  <main class="flex-1 p-6 max-w-3xl mx-auto">
 
-    <h1 class="text-2xl font-bold mb-6 text-center">Validasi Data 4D (Sheet 4d)</h1>
+    <h1 class="text-2xl font-bold mb-6 text-center">Validasi Data 4D (Kolom B2-B13) dengan Filter Shio</h1>
 
     <div class="bg-white p-6 rounded-lg shadow mb-6 grid gap-6">
       <div>
@@ -34,12 +34,16 @@
         <label for="inputAngkaMain" class="block font-medium mb-1">Input Angka Main (max 10 baris, 7 digit per baris)</label>
         <textarea id="inputAngkaMain" rows="10" maxlength="70" placeholder="Masukkan angka main, satu per baris, max 7 digit" class="w-full border rounded px-3 py-2 font-mono"></textarea>
       </div>
+      <div>
+        <label for="inputShio" class="block font-medium mb-1">Input Shio (pisahkan dengan koma, misal: 1,3,7)</label>
+        <input type="text" id="inputShio" placeholder="Misal: 1,3,7" class="w-full border rounded px-3 py-2" />
+      </div>
       <button id="btnValidasi" class="bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors">Validasi</button>
     </div>
 
     <div id="loading" class="hidden text-blue-600 mb-4 text-center font-semibold">⏳ Memproses data...</div>
 
-    <div id="result" class="overflow-x-auto bg-white p-4 rounded-lg shadow"></div>
+    <div id="result" class="overflow-x-auto bg-white p-4 rounded-lg shadow text-center font-mono"></div>
 
   </main>
 
@@ -48,123 +52,135 @@
   const SHEET_NAME = '4d';
   const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
 
+  // Mapping Shio ke angka 2 digit
+  const shioMap = {
+    1: ["01","13","25","37","49","61","73","85","97"],
+    2: ["02","14","26","38","50","62","74","86","98"],
+    3: ["03","15","27","39","51","63","75","87","99"],
+    4: ["04","16","28","40","52","64","76","88","00"],
+    5: ["05","17","29","41","53","65","77","89"],
+    6: ["06","18","30","42","54","66","78","90"],
+    7: ["07","19","31","43","55","67","79","91"],
+    8: ["08","20","32","44","56","68","80","92"],
+    9: ["09","21","33","45","57","69","81","93"],
+    10: ["10","22","34","46","58","70","82","94"],
+    11: ["11","23","35","47","59","71","83","95"],
+    12: ["12","24","36","48","60","72","84","96"]
+  };
+
   const inputKepala = document.getElementById('inputKepala');
   const inputEkor = document.getElementById('inputEkor');
   const inputAngkaMain = document.getElementById('inputAngkaMain');
+  const inputShio = document.getElementById('inputShio');
   const btnValidasi = document.getElementById('btnValidasi');
   const loadingEl = document.getElementById('loading');
   const resultEl = document.getElementById('result');
 
+  // Ambil data, kemudian filter range B2-B13
   async function fetchSheet() {
     const res = await fetch(gvizUrl);
     const text = await res.text();
     const jsonText = text.replace(/^.*setResponse\(|\);\s*$/gs, '');
-    return JSON.parse(jsonText).table;
+    const data = JSON.parse(jsonText).table;
+
+    // Ambil baris 2 sampai 13 (index 1 s.d 12)
+    // Ambil kolom B (index 1)
+    const rows = data.rows.slice(1,13).map(r => {
+      const cell = r.c[1];
+      return cell && cell.v !== null ? String(cell.v) : "";
+    });
+    return rows;
   }
 
-  function filterData(table, kepalaInput, ekorInput, angkaMainList) {
-    const rows = table.rows.map(r => r.c.map(c => c && c.v !== null ? String(c.v) : ""));
-    const headers = table.cols.map(c => c.label || '');
-
-    // Jika semua input kosong, tampilkan semua
-    if (!kepalaInput && !ekorInput && angkaMainList.length === 0) return { rows, headers };
-
-    return {
-      rows: rows.filter(r => {
-        const num = r[0];
-        if (!num || num.length < 4) return false;
-
-        const kepala = num[2]; // digit ke-3
-        const ekor = num[3];   // digit ke-4
-
-        let passKepala = true;
-        let passEkor = true;
-        let passMain = true;
-
-        if (kepalaInput.length > 0) passKepala = kepalaInput.includes(kepala);
-        if (ekorInput.length > 0) passEkor = ekorInput.includes(ekor);
-
-        if (angkaMainList.length > 0) {
-          // Cek angka main: angka main cocok jika angka kepala atau ekor muncul dalam salah satu baris angka main
-          passMain = angkaMainList.some(am => {
-            return am.includes(kepala) || am.includes(ekor);
-          });
-        }
-
-        return passKepala && passEkor && passMain;
-      }),
-      headers
-    };
-  }
-
-  function renderTable(headers, rows) {
-    if (!rows.length) {
-      resultEl.innerHTML = '<p class="text-center text-gray-600 font-semibold">Tidak ada data cocok.</p>';
-      return;
+  function filterData(rows, kepalaInput, ekorInput, angkaMainList, shioSelected) {
+    if (!kepalaInput.length && !ekorInput.length && angkaMainList.length === 0 && shioSelected.length === 0) {
+      return rows; // semua
     }
 
-    let html = '<table class="table-auto border-collapse w-full">';
-    html += '<thead><tr>';
-    headers.forEach(h => {
-      html += `<th class="border px-3 py-2 bg-gray-100 text-center">${h}</th>`;
+    return rows.filter(num => {
+      if (!num || num.length < 4) return false;
+
+      const kepala = num[2];
+      const ekor = num[3];
+      const duaDigit = num.slice(-2);
+
+      // Filter kepala
+      if (kepalaInput.length > 0 && !kepalaInput.includes(kepala)) return false;
+
+      // Filter ekor
+      if (ekorInput.length > 0 && !ekorInput.includes(ekor)) return false;
+
+      // Filter angka main
+      if (angkaMainList.length > 0) {
+        const matchMain = angkaMainList.some(am => am.includes(kepala) || am.includes(ekor));
+        if (!matchMain) return false;
+      }
+
+      // Filter shio
+      if (shioSelected.length > 0) {
+        const matchShio = shioSelected.some(sh => shioMap[sh]?.includes(duaDigit));
+        if (!matchShio) return false;
+      }
+
+      return true;
     });
-    html += '</tr></thead><tbody>';
-
-    rows.forEach(r => {
-      html += '<tr>';
-      r.forEach(cell => {
-        html += `<td class="border px-3 py-2 text-center font-mono">${cell}</td>`;
-      });
-      html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-
-    resultEl.innerHTML = html;
   }
 
   btnValidasi.addEventListener('click', async () => {
+    loadingEl.classList.remove('hidden');
+    resultEl.textContent = "";
+
+    // Input values
     const kepalaValRaw = inputKepala.value.trim();
     const ekorValRaw = inputEkor.value.trim();
     const angkaMainRaw = inputAngkaMain.value.trim();
+    const shioRaw = inputShio.value.trim();
 
-    // Validasi angka input: hanya digit, max 7 digit per input kepala dan ekor
+    // Validasi kepala dan ekor (max 7 digit angka tanpa spasi)
     const validDigit = /^\d{0,7}$/;
     if (!validDigit.test(kepalaValRaw)) {
       alert('Input Kepala Main hanya boleh angka maksimal 7 digit tanpa spasi atau tanda.');
+      loadingEl.classList.add('hidden');
       return;
     }
     if (!validDigit.test(ekorValRaw)) {
       alert('Input Ekor Main hanya boleh angka maksimal 7 digit tanpa spasi atau tanda.');
+      loadingEl.classList.add('hidden');
       return;
     }
 
-    // Proses angka main (max 10 baris, 7 digit per baris)
+    // Proses angka main (max 10 baris, max 7 digit per baris)
     let angkaMainList = angkaMainRaw
       .split('\n')
       .map(l => l.trim())
       .filter(l => l.length > 0)
-      .slice(0, 10);
-    // Validasi tiap baris angka main
+      .slice(0,10);
+
     for (const am of angkaMainList) {
       if (!/^\d{1,7}$/.test(am)) {
         alert('Setiap baris Angka Main harus berupa angka tanpa spasi/tanda, maksimal 7 digit.');
+        loadingEl.classList.add('hidden');
         return;
       }
     }
 
-    loadingEl.classList.remove('hidden');
-    resultEl.innerHTML = '';
+    // Proses shio input
+    let shioSelected = shioRaw.split(',').map(s => s.trim()).filter(s => s && !isNaN(s) && s >= 1 && s <= 12);
 
     try {
-      const data = await fetchSheet();
-      const { rows, headers } = filterData(data, kepalaValRaw.split(''), ekorValRaw.split(''), angkaMainList);
-      renderTable(headers, rows);
-    } catch (err) {
-      resultEl.innerHTML = `<p class="text-red-600 text-center font-semibold">Gagal memuat data: ${err.message}</p>`;
-    } finally {
-      loadingEl.classList.add('hidden');
+      const rows = await fetchSheet();
+      const filtered = filterData(kepalaValRaw.split(''), ekorValRaw.split(''), angkaMainList, shioSelected)
+        ? filterData(rows, kepalaValRaw.split(''), ekorValRaw.split(''), angkaMainList, shioSelected)
+        : [];
+      if(filtered.length === 0) {
+        resultEl.textContent = "Tidak ada data yang cocok dengan filter.";
+      } else {
+        resultEl.innerHTML = filtered.map(n => `<div class="p-2 border-b">${n}</div>`).join('');
+      }
+    } catch(e) {
+      resultEl.textContent = "Gagal memuat data: " + e.message;
     }
+    loadingEl.classList.add('hidden');
   });
 </script>
 
