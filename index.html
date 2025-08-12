@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Validasi Data 4D dan Tampilkan Data</title>
+  <title>Validasi Data 4D dan Tampilkan Data Lengkap</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="flex min-h-screen bg-gray-100 font-sans">
@@ -15,9 +15,9 @@
     <a href="#" class="mb-3 text-gray-700 hover:text-blue-600">Data Lainnya</a>
   </nav>
 
-  <main class="flex-1 p-6 max-w-4xl mx-auto">
+  <main class="flex-1 p-6 max-w-6xl mx-auto">
 
-    <h1 class="text-2xl font-bold mb-6 text-center">Data 4D (Kolom B2-B13) dan Validasi</h1>
+    <h1 class="text-2xl font-bold mb-6 text-center">Data 4D dan Validasi Lengkap (Kolom A sampai J)</h1>
 
     <div class="bg-white p-6 rounded-lg shadow mb-6 grid gap-6">
       <div>
@@ -42,7 +42,7 @@
     <div id="loading" class="hidden text-blue-600 mb-4 text-center font-semibold">⏳ Memproses data...</div>
 
     <div id="result" class="overflow-x-auto bg-white p-4 rounded-lg shadow font-mono max-h-[400px] overflow-y-auto">
-      <!-- Tabel akan muncul di sini -->
+      <!-- Tabel hasil akan muncul di sini -->
     </div>
 
   </main>
@@ -52,6 +52,7 @@
   const SHEET_NAME = '4d';
   const gvizUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
 
+  // Mapping shio ke angka dua digit
   const shioMap = {
     1: ["01","13","25","37","49","61","73","85","97"],
     2: ["02","14","26","38","50","62","74","86","98"],
@@ -84,14 +85,10 @@
       const text = await res.text();
       const jsonText = text.replace(/^.*setResponse\(|\);\s*$/gs, '');
       const data = JSON.parse(jsonText).table;
-
-      // Ambil baris 2 sampai 13 (index 1 sampai 12)
-      // Ambil kolom B (index 1)
-      const rows = data.rows.slice(1,13).map(r => {
-        const cell = r.c[1];
-        return cell && cell.v !== null ? String(cell.v) : "";
+      return data.rows.map(row => {
+        // Ambil kolom A sampai J (index 0 sampai 9)
+        return row.c.slice(0, 10).map(cell => cell && cell.v !== null ? String(cell.v) : "");
       });
-      return rows;
     } catch (error) {
       throw new Error('Gagal mengambil data dari Google Sheets: ' + error.message);
     }
@@ -107,21 +104,32 @@
       <thead>
         <tr class="bg-gray-200">
           <th class="border border-gray-300 px-3 py-1">No</th>
-          <th class="border border-gray-300 px-3 py-1">Angka 4D</th>
-          <th class="border border-gray-300 px-3 py-1">Kepala (Digit ke-3)</th>
-          <th class="border border-gray-300 px-3 py-1">Ekor (Digit ke-4)</th>
+          <th class="border border-gray-300 px-3 py-1">A</th>
+          <th class="border border-gray-300 px-3 py-1">B</th>
+          <th class="border border-gray-300 px-3 py-1">C</th>
+          <th class="border border-gray-300 px-3 py-1">D</th>
+          <th class="border border-gray-300 px-3 py-1">E</th>
+          <th class="border border-gray-300 px-3 py-1">F</th>
+          <th class="border border-gray-300 px-3 py-1">G</th>
+          <th class="border border-gray-300 px-3 py-1">H</th>
+          <th class="border border-gray-300 px-3 py-1">I</th>
+          <th class="border border-gray-300 px-3 py-1">J</th>
+          <th class="border border-gray-300 px-3 py-1">Kepala (Digit 3)</th>
+          <th class="border border-gray-300 px-3 py-1">Ekor (Digit 4)</th>
           <th class="border border-gray-300 px-3 py-1">2 Digit Terakhir (Shio)</th>
         </tr>
       </thead><tbody>`;
 
-    data.forEach((num, i) => {
+    data.forEach((row, i) => {
+      // Ambil angka 4d dari kolom B (index 1)
+      const num = row[1] || "";
       const kepala = num.length >=4 ? num[2] : "-";
       const ekor = num.length >=4 ? num[3] : "-";
       const duaDigit = num.length >=2 ? num.slice(-2) : "-";
 
       html += `<tr>
         <td class="border border-gray-300 px-3 py-1">${i+1}</td>
-        <td class="border border-gray-300 px-3 py-1 font-bold">${num}</td>
+        ${row.map(cell => `<td class="border border-gray-300 px-3 py-1">${cell}</td>`).join('')}
         <td class="border border-gray-300 px-3 py-1">${kepala}</td>
         <td class="border border-gray-300 px-3 py-1">${ekor}</td>
         <td class="border border-gray-300 px-3 py-1">${duaDigit}</td>
@@ -134,11 +142,13 @@
 
   function filterData(data, kepalaInput, ekorInput, angkaMainList, shioSelected) {
     if (!kepalaInput.length && !ekorInput.length && angkaMainList.length === 0 && shioSelected.length === 0) {
-      return data; // semua data tanpa filter
+      return data; // tampilkan semua jika tidak ada filter
     }
 
-    return data.filter(num => {
-      if (!num || num.length < 4) return false;
+    return data.filter(row => {
+      // Kolom B (index 1) adalah angka 4D
+      const num = row[1] || "";
+      if (num.length < 4) return false;
 
       const kepala = num[2];
       const ekor = num[3];
