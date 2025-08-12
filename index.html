@@ -8,7 +8,6 @@
 </head>
 <body class="flex min-h-screen bg-gray-100 font-sans">
 
-  <!-- Navbar kiri -->
   <nav class="w-56 bg-white shadow-md p-6 flex flex-col">
     <h2 class="text-xl font-bold mb-6 border-b pb-2">Menu Navigasi</h2>
     <a href="#" class="mb-3 text-gray-700 hover:text-blue-600">Dashboard</a>
@@ -16,7 +15,6 @@
     <a href="#" class="mb-3 text-gray-700 hover:text-blue-600">Data Lainnya</a>
   </nav>
 
-  <!-- Konten utama -->
   <main class="flex-1 p-6 max-w-4xl mx-auto">
 
     <h1 class="text-2xl font-bold mb-6 text-center">Data 4D (Kolom B2-B13) dan Validasi</h1>
@@ -80,21 +78,25 @@
   let allData = [];
 
   async function fetchSheet() {
-    const res = await fetch(gvizUrl);
-    const text = await res.text();
-    const jsonText = text.replace(/^.*setResponse\(|\);\s*$/gs, '');
-    const data = JSON.parse(jsonText).table;
+    try {
+      const res = await fetch(gvizUrl);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const text = await res.text();
+      const jsonText = text.replace(/^.*setResponse\(|\);\s*$/gs, '');
+      const data = JSON.parse(jsonText).table;
 
-    // Ambil baris 2 sampai 13 (index 1 sampai 12)
-    // Ambil kolom B (index 1)
-    const rows = data.rows.slice(1,13).map(r => {
-      const cell = r.c[1];
-      return cell && cell.v !== null ? String(cell.v) : "";
-    });
-    return rows;
+      // Ambil baris 2 sampai 13 (index 1 sampai 12)
+      // Ambil kolom B (index 1)
+      const rows = data.rows.slice(1,13).map(r => {
+        const cell = r.c[1];
+        return cell && cell.v !== null ? String(cell.v) : "";
+      });
+      return rows;
+    } catch (error) {
+      throw new Error('Gagal mengambil data dari Google Sheets: ' + error.message);
+    }
   }
 
-  // Render tabel data 4D yang diberikan
   function renderTable(data) {
     if (!data.length) {
       resultEl.innerHTML = "<p class='text-center text-red-600'>Tidak ada data yang cocok.</p>";
@@ -167,13 +169,11 @@
   btnValidasi.addEventListener('click', () => {
     loadingEl.classList.remove('hidden');
     setTimeout(() => {
-      // Ambil nilai input dan validasi
       const kepalaVal = inputKepala.value.trim();
       const ekorVal = inputEkor.value.trim();
       const angkaMainRaw = inputAngkaMain.value.trim();
       const shioRaw = inputShio.value.trim();
 
-      // Validasi input angka kepala dan ekor (maks 7 digit, angka saja)
       const validDigit = /^\d{0,7}$/;
       if (!validDigit.test(kepalaVal)) {
         alert('Input Kepala hanya boleh angka maksimal 7 digit tanpa spasi atau tanda.');
@@ -186,7 +186,6 @@
         return;
       }
 
-      // Proses angka main (max 10 baris, max 7 digit per baris)
       let angkaMainList = angkaMainRaw
         .split('\n')
         .map(l => l.trim())
@@ -200,19 +199,16 @@
         }
       }
 
-      // Proses shio input
       let shioSelected = shioRaw.split(',')
         .map(s => s.trim())
         .filter(s => s && !isNaN(s) && s >= 1 && s <= 12);
 
-      // Filter data dan render tabel
       const filtered = filterData(allData, kepalaVal.split(''), ekorVal.split(''), angkaMainList, shioSelected);
       renderTable(filtered);
       loadingEl.classList.add('hidden');
     }, 300);
   });
 
-  // Ambil data saat load halaman
   window.onload = async () => {
     loadingEl.classList.remove('hidden');
     try {
